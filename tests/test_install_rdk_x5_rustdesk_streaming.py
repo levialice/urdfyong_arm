@@ -121,6 +121,21 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("Target user", text)
         self.assertIn("same LAN", text)
 
+    def test_installer_configures_autologin_and_x11(self):
+        text = self.read_installer()
+
+        self.assertIn("configure_autologin", text)
+        self.assertIn("AutomaticLoginEnable", text)
+        self.assertIn("AutomaticLogin", text)
+        self.assertIn("WaylandEnable", text)
+        self.assertIn("false", text)
+
+    def test_installer_allows_skipping_autologin_and_x11(self):
+        text = self.read_installer()
+
+        self.assertIn("CONFIGURE_AUTOLOGIN=0", text)
+        self.assertIn("CONFIGURE_X11=0", text)
+
 
 if __name__ == "__main__":
     unittest.main()

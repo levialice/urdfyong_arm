@@ -155,6 +155,77 @@ configure_rustdesk() {
   run systemctl restart rustdesk
 }
 
+detect_gdm_config() {
+  if [[ -f /etc/gdm3/custom.conf ]]; then
+    echo "/etc/gdm3/custom.conf"
+  elif [[ -f /etc/gdm/custom.conf ]]; then
+    echo "/etc/gdm/custom.conf"
+  else
+    echo "/etc/gdm3/custom.conf"
+  fi
+}
+
+ensure_daemon_section() {
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    run install -d -m 0755 "$(dirname "${file}")"
+    if [[ "${DRY_RUN}" -eq 0 ]]; then
+      printf '[daemon]\n' > "${file}"
+    else
+      log "Dry run: would create ${file} with [daemon] section"
+    fi
+  elif ! grep -q '^\[daemon\]' "${file}"; then
+    if [[ "${DRY_RUN}" -eq 0 ]]; then
+      printf '\n[daemon]\n' >> "${file}"
+    else
+      log "Dry run: would append [daemon] to ${file}"
+    fi
+  fi
+}
+
+set_gdm_key() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    log "Dry run: would set ${key}=${value} in ${file}"
+  elif grep -q "^#\\?${key}=" "${file}"; then
+    sed -i "s|^#\\?${key}=.*|${key}=${value}|" "${file}"
+  else
+    sed -i "/^\\[daemon\\]/a ${key}=${value}" "${file}"
+  fi
+}
+
+configure_autologin() {
+  if [[ "${CONFIGURE_AUTOLOGIN}" -eq 0 ]]; then
+    log "Skipping auto-login configuration."
+    return 0
+  fi
+
+  if ! id "${TARGET_USER}" >/dev/null 2>&1; then
+    echo "Target user does not exist: ${TARGET_USER}" >&2
+    exit 1
+  fi
+
+  local gdm_config
+  gdm_config="$(detect_gdm_config)"
+  ensure_daemon_section "${gdm_config}"
+  set_gdm_key "${gdm_config}" "AutomaticLoginEnable" "True"
+  set_gdm_key "${gdm_config}" "AutomaticLogin" "${TARGET_USER}"
+}
+
+configure_x11_session() {
+  if [[ "${CONFIGURE_X11}" -eq 0 ]]; then
+    log "Skipping X11 configuration."
+    return 0
+  fi
+
+  local gdm_config
+  gdm_config="$(detect_gdm_config)"
+  ensure_daemon_section "${gdm_config}"
+  set_gdm_key "${gdm_config}" "WaylandEnable" "false"
+}
+
 print_connection_info() {
   local rustdesk_id
   rustdesk_id="$(rustdesk --get-id 2>/dev/null || true)"
@@ -192,6 +263,8 @@ main() {
 
   install_rustdesk
   configure_rustdesk
+  configure_autologin
+  configure_x11_session
   print_connection_info
 
   log "Safety checks passed."
