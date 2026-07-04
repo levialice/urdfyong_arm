@@ -127,6 +127,7 @@ install_rustdesk() {
   fi
 
   if [[ -n "${RUSTDESK_DEB}" ]]; then
+    local deb_path
     if [[ ! -f "${RUSTDESK_DEB}" ]]; then
       echo "RustDesk deb not found: ${RUSTDESK_DEB}" >&2
       exit 1
@@ -139,7 +140,8 @@ install_rustdesk() {
         exit 1
         ;;
     esac
-    run apt-get install -y "${RUSTDESK_DEB}"
+    deb_path="$(realpath "${RUSTDESK_DEB}")"
+    run apt-get install -y "${deb_path}"
   else
     echo "RustDesk is not installed. Download the Linux ARM64 .deb from https://github.com/rustdesk/rustdesk/releases and rerun with --deb PATH." >&2
     exit 1
@@ -185,6 +187,7 @@ main() {
   require_command systemctl
   require_command loginctl
   require_command install
+  require_command realpath
   prompt_password_if_needed
 
   install_rustdesk
