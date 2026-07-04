@@ -120,6 +120,50 @@ prompt_password_if_needed() {
   fi
 }
 
+install_rustdesk() {
+  if [[ -n "${RUSTDESK_DEB}" ]]; then
+    if [[ ! -f "${RUSTDESK_DEB}" ]]; then
+      echo "RustDesk deb not found: ${RUSTDESK_DEB}" >&2
+      exit 1
+    fi
+    case "${RUSTDESK_DEB}" in
+      *arm64.deb|*aarch64.deb)
+        ;;
+      *)
+        echo "RustDesk deb must be an ARM64 / aarch64 package: ${RUSTDESK_DEB}" >&2
+        exit 1
+        ;;
+    esac
+    run apt-get install -y "${RUSTDESK_DEB}"
+  elif command -v rustdesk >/dev/null 2>&1; then
+    log "RustDesk is already installed."
+  else
+    echo "RustDesk is not installed. Download the Linux ARM64 .deb from https://github.com/rustdesk/rustdesk/releases and rerun with --deb PATH." >&2
+    exit 1
+  fi
+}
+
+configure_rustdesk() {
+  require_command rustdesk
+  run systemctl enable rustdesk
+  run rustdesk --password "${RUSTDESK_PASSWORD}"
+  run systemctl restart rustdesk
+}
+
+print_connection_info() {
+  local rustdesk_id
+  rustdesk_id="$(rustdesk --get-id 2>/dev/null || true)"
+  echo "..............................................."
+  if [[ -n "${rustdesk_id}" ]]; then
+    echo "RustDesk ID: ${rustdesk_id}"
+  else
+    echo "RustDesk ID: not available yet; check with: rustdesk --get-id"
+  fi
+  echo "Target user: ${TARGET_USER}"
+  echo "Connection scope: same LAN"
+  echo "..............................................."
+}
+
 main() {
   log "Target user: ${TARGET_USER}"
 
@@ -139,6 +183,10 @@ main() {
   require_command loginctl
   require_command install
   prompt_password_if_needed
+
+  install_rustdesk
+  configure_rustdesk
+  print_connection_info
 
   log "Safety checks passed."
 }

@@ -91,6 +91,20 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
                 self.assertIn(option, result.stderr)
                 self.assertIn("requires a non-option value", result.stderr)
 
+    def test_installer_installs_local_deb_with_apt(self):
+        text = self.read_installer()
+
+        self.assertIn("install_rustdesk", text)
+        self.assertIn('apt-get install -y "${RUSTDESK_DEB}"', text)
+        self.assertIn("rustdesk --password", text)
+        self.assertIn("systemctl restart rustdesk", text)
+
+    def test_installer_prints_rustdesk_id(self):
+        text = self.read_installer()
+
+        self.assertIn("rustdesk --get-id", text)
+        self.assertIn("RustDesk ID", text)
+
 
 if __name__ == "__main__":
     unittest.main()
