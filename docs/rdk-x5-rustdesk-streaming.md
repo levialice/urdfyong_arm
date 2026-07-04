@@ -15,14 +15,16 @@
 先从 RustDesk 发布页下载 Linux ARM64 `.deb` 包到 RDK X5，再在仓库根目录运行：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb
 ```
 
 如果系统中已经安装 RustDesk，可以省略 `--deb`：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh
 ```
+
+脚本会交互提示输入 RustDesk 无人值守密码。
 
 不要把真实现场密码写入脚本、文档、测试或提交记录；仓库中只使用 `<现场测试密码>` 这类占位。
 
@@ -33,7 +35,7 @@ sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --password '<现场测试密
 - 目标桌面用户为 `sunrise`，并配置 GDM 自动登录。
 - 在 GDM 配置中设置 `WaylandEnable=false`，优先使用 X11 桌面会话。
 - 启用 RustDesk systemd 服务，并重启 `rustdesk`。
-- RustDesk 无人值守密码来自 `--password` 参数；未传参数时由脚本交互输入。
+- RustDesk 无人值守密码默认由脚本交互输入。
 
 脚本会配置 GDM / X11，但这不保证所有无 HDMI 环境都能生成可串流桌面。如果不接显示器时仍然黑屏，建议使用 HDMI dummy 或接入临时显示器完成验证。
 
@@ -48,6 +50,16 @@ hostname -I
 ```
 
 记录 `rustdesk --get-id` 输出的 RustDesk ID，以及 `hostname -I` 中的局域网 IP。电脑或手机连接同一局域网后，打开 RustDesk 客户端，输入 RustDesk ID 和部署时设置的密码连接桌面。
+
+## 自动化/临时测试
+
+非敏感测试环境可以用 `--password '<现场测试密码>'` 传入临时密码：
+
+```bash
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb --password '<现场测试密码>'
+```
+
+这种方式只适合自动化或临时测试，因为密码会暴露在 shell history 和 process argv 中。
 
 ## 不接显示器验证流程
 

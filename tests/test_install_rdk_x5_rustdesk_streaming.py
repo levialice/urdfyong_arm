@@ -129,6 +129,18 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
         self.assertIn("aarch64", text)
         self.assertIn("arm64", text)
+        self.assertIn("require_command dpkg-deb", text)
+        self.assertIn('dpkg-deb -f "${deb_path}" Architecture', text)
+        self.assertIn("deb_arch", text)
+        self.assertIn("RustDesk deb architecture must be arm64", text)
+        self.assertLess(
+            text.index('deb_path="$(realpath "${RUSTDESK_DEB}")"'),
+            text.index('dpkg-deb -f "${deb_path}" Architecture'),
+        )
+        self.assertLess(
+            text.index('dpkg-deb -f "${deb_path}" Architecture'),
+            text.index('apt-get install -y "${deb_path}"'),
+        )
         self.assertNotIn("x86_64.deb", text)
 
     def test_installer_does_not_hardcode_site_password(self):
@@ -343,6 +355,23 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("install_rdk_x5_rustdesk_streaming.sh", readme)
         self.assertIn("rdk-x5-rustdesk-streaming.md", readme)
         self.assertIn("rdk-x5-rustdesk-streaming.md", deployment)
+
+    def test_streaming_docs_default_to_interactive_password_prompt(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        doc = (REPO_ROOT / "docs" / "rdk-x5-rustdesk-streaming.md").read_text(encoding="utf-8")
+
+        default_command = (
+            "sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh "
+            "--deb /path/to/rustdesk-arm64.deb"
+        )
+
+        self.assertIn(default_command, readme)
+        self.assertNotIn(default_command + " --password '<现场测试密码>'", readme)
+        self.assertIn(default_command, doc)
+        self.assertIn("脚本会交互提示输入 RustDesk 无人值守密码", doc)
+        self.assertIn("--password '<现场测试密码>'", doc)
+        self.assertIn("shell history", doc)
+        self.assertIn("process argv", doc)
 
     def test_streaming_doc_mentions_headless_verification(self):
         doc = (REPO_ROOT / "docs" / "rdk-x5-rustdesk-streaming.md").read_text(encoding="utf-8")

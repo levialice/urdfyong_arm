@@ -49,7 +49,7 @@ sudo ./scripts/install_rdk_x5_wifi_provisioning.sh
 RDK X5 还可以配置同一局域网内的 RustDesk 桌面串流，用于不接显示器时远程打开终端、VS Code 和 RViz：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb
 ```
 
 说明见 [RDK X5 RustDesk 桌面串流说明](docs/rdk-x5-rustdesk-streaming.md)。

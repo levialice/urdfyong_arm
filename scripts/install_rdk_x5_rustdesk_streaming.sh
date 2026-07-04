@@ -135,6 +135,7 @@ install_rustdesk() {
 
   if [[ -n "${RUSTDESK_DEB}" ]]; then
     local deb_path
+    local deb_arch
     if [[ ! -f "${RUSTDESK_DEB}" ]]; then
       echo "RustDesk deb not found: ${RUSTDESK_DEB}" >&2
       exit 1
@@ -143,11 +144,15 @@ install_rustdesk() {
       *arm64.deb|*aarch64.deb)
         ;;
       *)
-        echo "RustDesk deb must be an ARM64 / aarch64 package: ${RUSTDESK_DEB}" >&2
-        exit 1
+        echo "RustDesk deb filename should look like an ARM64 / aarch64 package; verifying metadata: ${RUSTDESK_DEB}" >&2
         ;;
     esac
     deb_path="$(realpath "${RUSTDESK_DEB}")"
+    deb_arch="$(dpkg-deb -f "${deb_path}" Architecture 2>/dev/null || true)"
+    if [[ "${deb_arch}" != "arm64" ]]; then
+      echo "RustDesk deb architecture must be arm64; got: ${deb_arch:-unknown}" >&2
+      exit 1
+    fi
     run apt-get install -y "${deb_path}"
   else
     echo "RustDesk is not installed. Download the Linux ARM64 .deb from https://github.com/rustdesk/rustdesk/releases and rerun with --deb PATH." >&2
@@ -337,6 +342,7 @@ main() {
   require_command loginctl
   require_command install
   require_command realpath
+  require_command dpkg-deb
   require_command python3
   prompt_password_if_needed
 
