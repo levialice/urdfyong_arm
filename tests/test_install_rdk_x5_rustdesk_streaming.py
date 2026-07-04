@@ -65,6 +65,20 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("[rdkx5-rustdesk] Dry run", result.stdout)
         self.assertIn("Target user: sunrise", result.stdout)
 
+    def test_options_reject_missing_value_before_next_option(self):
+        for option in ("--password", "--user", "--deb"):
+            with self.subTest(option=option):
+                result = subprocess.run(
+                    ["bash", bash_path(INSTALLER), option, "--dry-run"],
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+
+                self.assertEqual(2, result.returncode)
+                self.assertIn(option, result.stderr)
+                self.assertIn("requires a non-option value", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

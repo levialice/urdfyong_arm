@@ -25,18 +25,31 @@ Options:
 USAGE
 }
 
+require_option_value() {
+  local option="$1"
+  local value="${2-}"
+
+  if [[ -z "${value}" || "${value}" == -* ]]; then
+    echo "Option ${option} requires a non-option value." >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --password)
-      RUSTDESK_PASSWORD="${2:-}"
+      require_option_value "$1" "${2-}"
+      RUSTDESK_PASSWORD="$2"
       shift
       ;;
     --deb)
-      RUSTDESK_DEB="${2:-}"
+      require_option_value "$1" "${2-}"
+      RUSTDESK_DEB="$2"
       shift
       ;;
     --user)
-      TARGET_USER="${2:-}"
+      require_option_value "$1" "${2-}"
+      TARGET_USER="$2"
       shift
       ;;
     --no-autologin)
