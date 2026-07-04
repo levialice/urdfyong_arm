@@ -108,6 +108,13 @@ validate_architecture() {
   esac
 }
 
+validate_target_user_name() {
+  if [[ ! "${TARGET_USER}" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+    echo "Invalid target user name: ${TARGET_USER}" >&2
+    exit 1
+  fi
+}
+
 prompt_password_if_needed() {
   if [[ -z "${RUSTDESK_PASSWORD}" ]]; then
     read -r -s -p "RustDesk unattended password: " RUSTDESK_PASSWORD
@@ -189,10 +196,65 @@ set_gdm_key() {
   local value="$3"
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log "Dry run: would set ${key}=${value} in ${file}"
-  elif grep -q "^#\\?${key}=" "${file}"; then
-    sed -i "s|^#\\?${key}=.*|${key}=${value}|" "${file}"
   else
-    sed -i "/^\\[daemon\\]/a ${key}=${value}" "${file}"
+    python3 - "${file}" "${key}" "${value}" <<'PY'
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+path = Path(sys.argv[1])
+target_key = sys.argv[2]
+target_value = sys.argv[3]
+
+lines = path.read_text(encoding="utf-8").splitlines(keepends=True) if path.exists() else []
+section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:[#;].*)?$")
+key_re = re.compile(rf"^\s*#?\s*{re.escape(target_key)}\s*=")
+
+daemon_start = None
+daemon_end = len(lines)
+current_section = None
+for index, line in enumerate(lines):
+    match = section_re.match(line.rstrip("\r\n"))
+    if not match:
+        continue
+
+    if current_section == "daemon" and daemon_end == len(lines):
+        daemon_end = index
+
+    current_section = match.group(1).strip()
+    if current_section == "daemon" and daemon_start is None:
+        daemon_start = index
+        daemon_end = len(lines)
+
+if daemon_start is None:
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] = lines[-1] + "\n"
+    if lines and lines[-1].strip():
+        lines.append("\n")
+    lines.extend(["[daemon]\n", f"{target_key}={target_value}\n"])
+else:
+    inserted = False
+    for index in range(daemon_start + 1, daemon_end):
+        if key_re.match(lines[index].rstrip("\r\n")):
+            lines[index] = f"{target_key}={target_value}\n"
+            inserted = True
+            break
+    if not inserted:
+        lines.insert(daemon_end, f"{target_key}={target_value}\n")
+
+fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent), text=True)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as tmp:
+        tmp.writelines(lines)
+    os.replace(tmp_name, path)
+except Exception:
+    try:
+        os.unlink(tmp_name)
+    finally:
+        raise
+PY
   fi
 }
 
@@ -201,6 +263,8 @@ configure_autologin() {
     log "Skipping auto-login configuration."
     return 0
   fi
+
+  validate_target_user_name
 
   if ! id "${TARGET_USER}" >/dev/null 2>&1; then
     echo "Target user does not exist: ${TARGET_USER}" >&2
@@ -242,6 +306,7 @@ print_connection_info() {
 
 main() {
   log "Target user: ${TARGET_USER}"
+  validate_target_user_name
 
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log "Dry run only; no system changes will be made."
@@ -259,6 +324,7 @@ main() {
   require_command loginctl
   require_command install
   require_command realpath
+  require_command python3
   prompt_password_if_needed
 
   install_rustdesk
@@ -270,4 +336,6 @@ main() {
   log "Safety checks passed."
 }
 
-main "$@"
+if [[ "${RDKX5_RUSTDESK_INSTALLER_TESTING:-0}" != 1 ]]; then
+  main "$@"
+fi

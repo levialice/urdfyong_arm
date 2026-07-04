@@ -44,6 +44,35 @@ def run_bash_installer(*args, check=True):
     return result
 
 
+def run_bash_script(script, check=True):
+    try:
+        result = subprocess.run(
+            ["bash", "-lc", script],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            errors="replace",
+        )
+    except FileNotFoundError as exc:
+        raise unittest.SkipTest("bash is not available") from exc
+
+    output = (result.stdout or "") + (result.stderr or "")
+    normalized_output = output.replace("\x00", "")
+    if "E_ACCESSDENIED" in normalized_output or "CreateInstance" in normalized_output:
+        raise unittest.SkipTest("bash/WSL is not available in this environment")
+
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            result.args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+
+    return result
+
+
 class RustDeskStreamingInstallerTest(unittest.TestCase):
     def read_installer(self):
         return INSTALLER.read_text(encoding="utf-8")
@@ -135,6 +164,79 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
         self.assertIn("CONFIGURE_AUTOLOGIN=0", text)
         self.assertIn("CONFIGURE_X11=0", text)
+
+    def test_installer_validates_target_user_before_installing_rustdesk(self):
+        text = self.read_installer()
+
+        self.assertIn("validate_target_user_name", text)
+        self.assertIn("^[a-z_][a-z0-9_-]*[$]?$", text)
+        self.assertIn("Invalid target user name", text)
+
+        validation_call = text.index("validate_target_user_name")
+        main_body = text.index("main()")
+        install_call = text.index("install_rustdesk", main_body)
+        validation_in_main = text.index("validate_target_user_name", main_body)
+
+        self.assertLess(validation_in_main, install_call)
+        self.assertGreater(validation_in_main, validation_call)
+
+    def test_gdm_key_updates_are_section_scoped_without_sed_replacement(self):
+        text = self.read_installer()
+
+        self.assertNotIn("sed -i", text)
+        self.assertNotIn('grep -q "^#\\\\?${key}="', text)
+        self.assertIn("[daemon]", text)
+        self.assertIn("current_section", text)
+        self.assertIn("os.replace", text)
+
+    def test_set_gdm_key_only_updates_daemon_section(self):
+        temp_root = REPO_ROOT / "tmp_test_artifacts"
+        try:
+            temp_root.mkdir(exist_ok=True)
+        except PermissionError as exc:
+            raise unittest.SkipTest("temporary test directory is not writable") from exc
+
+        config = temp_root / f"custom-{self.id().replace('.', '-')}.conf"
+        try:
+            config.write_text(
+                "[security]\n"
+                "WaylandEnable=true\n"
+                "\n"
+                "[daemon]\n"
+                "#AutomaticLoginEnable=False\n"
+                "\n"
+                "[other]\n"
+                "WaylandEnable=true\n",
+                encoding="utf-8",
+            )
+        except PermissionError as exc:
+            raise unittest.SkipTest("temporary test file is not writable") from exc
+
+        script = (
+            "set -euo pipefail\n"
+            f"export INSTALLER={bash_path(INSTALLER)!r}\n"
+            f"export GDM_CONFIG={bash_path(config)!r}\n"
+            "export RDKX5_RUSTDESK_INSTALLER_TESTING=1\n"
+            'source "$INSTALLER"\n'
+            'set_gdm_key "$GDM_CONFIG" "WaylandEnable" "false"\n'
+            'set_gdm_key "$GDM_CONFIG" "AutomaticLoginEnable" "True"\n'
+            'cat "$GDM_CONFIG"\n'
+        )
+        try:
+            result = run_bash_script(script)
+        finally:
+            try:
+                config.unlink()
+            except FileNotFoundError:
+                pass
+            try:
+                temp_root.rmdir()
+            except OSError:
+                pass
+
+        self.assertIn("[security]\nWaylandEnable=true", result.stdout)
+        self.assertIn("[other]\nWaylandEnable=true", result.stdout)
+        self.assertRegex(result.stdout, r"\[daemon\]\nAutomaticLoginEnable=True\n\n?WaylandEnable=false")
 
 
 if __name__ == "__main__":
