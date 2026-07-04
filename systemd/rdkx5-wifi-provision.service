@@ -1,0 +1,13 @@
+[Unit]
+Description=RDK X5 Wi-Fi provisioning fallback hotspot
+Wants=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/rdkx5-wifi-provision/rdkx5_wifi_provision.py --serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

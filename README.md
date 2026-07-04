@@ -38,6 +38,14 @@ Ubuntu 22.04 + ROS 2 Humble 的一键部署脚本：
 ./scripts/deploy_rdk_x5_humble.sh
 ```
 
+RDK X5 还可以安装开机网页配网服务。开机 30 秒内没有连上已保存 Wi-Fi 时，设备会开启无密码热点 `RDKX5-Setup`，电脑连接后访问 `http://192.168.88.1` 完成配网：
+
+```bash
+sudo ./scripts/install_rdk_x5_wifi_provisioning.sh
+```
+
+设计说明见 [RDK X5 网页配网设计](docs/rdk-x5-wifi-provisioning-design.md)。
+
 ### 1. 克隆仓库
 ```bash
 git clone <本仓库地址>

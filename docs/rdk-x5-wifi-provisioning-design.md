@@ -93,12 +93,13 @@ nmcli con modify RDKX5-Setup ipv6.method ignore
 5. 确认热点关闭，设备可以通过目标局域网 SSH 或 RustDesk 访问。
 6. 输入错误密码，确认热点不会关闭，页面能提示失败并允许重试。
 
-## 后续实现计划
+## 首版实现说明
 
-确认本设计后，再添加以下文件：
+首版实现使用 Python 标准库 HTTP 服务，不额外依赖 Flask。开机检测、热点控制和网页配网合并在 `rdkx5-wifi-provision.service` 一个 systemd 服务中，后续如果需要更复杂的页面或认证，再拆分独立 Web 服务。
+
+首版包含以下文件：
 
 - `scripts/install_rdk_x5_wifi_provisioning.sh`
 - `scripts/rdkx5_wifi_provision.py`
 - `systemd/rdkx5-wifi-provision.service`
-- `systemd/rdkx5-wifi-provision-web.service`
-- 配套测试，覆盖命令生成、状态判断和失败重试逻辑。
+- 配套测试，覆盖命令生成、状态判断、网页渲染和失败重试逻辑。
