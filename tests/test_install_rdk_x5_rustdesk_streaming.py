@@ -1,3 +1,4 @@
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -5,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = REPO_ROOT / "scripts" / "install_rdk_x5_rustdesk_streaming.sh"
+_BASH_AVAILABLE = None
 
 
 def bash_path(path):
@@ -15,7 +17,35 @@ def bash_path(path):
     return str(path)
 
 
+def require_bash_available():
+    global _BASH_AVAILABLE
+    if _BASH_AVAILABLE is not None:
+        if not _BASH_AVAILABLE:
+            raise unittest.SkipTest("bash/WSL is not available in this environment")
+        return
+
+    try:
+        result = subprocess.run(
+            ["bash", "-lc", "true"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            errors="replace",
+        )
+    except FileNotFoundError as exc:
+        _BASH_AVAILABLE = False
+        raise unittest.SkipTest("bash is not available") from exc
+
+    if result.returncode != 0:
+        _BASH_AVAILABLE = False
+        raise unittest.SkipTest("bash/WSL is not available in this environment")
+
+    _BASH_AVAILABLE = True
+
+
 def run_bash_installer(*args, check=True):
+    require_bash_available()
     try:
         result = subprocess.run(
             ["bash", bash_path(INSTALLER), *args],
@@ -45,6 +75,10 @@ def run_bash_installer(*args, check=True):
 
 
 def run_bash_script(script, check=True):
+    if os.name == "nt":
+        raise unittest.SkipTest("bash behavior tests require a Unix shell")
+
+    require_bash_available()
     try:
         result = subprocess.run(
             ["bash", "-lc", script],
