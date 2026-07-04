@@ -605,13 +605,13 @@ Create `docs/rdk-x5-rustdesk-streaming.md` with:
 先从 RustDesk 发布页下载 Linux ARM64 `.deb` 包到 RDK X5，然后运行：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb
 ```
 
 如果 RustDesk 已经安装，可以省略 `--deb`：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh
 ```
 
 脚本默认配置：
@@ -670,7 +670,7 @@ Add this paragraph after the Wi-Fi provisioning section in `README.md`:
 RDK X5 还可以配置同一局域网内的 RustDesk 桌面串流，用于不接显示器时远程打开终端、VS Code 和 RViz：
 
 ```bash
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --deb /path/to/rustdesk-arm64.deb
 ```
 
 说明见 [RDK X5 RustDesk 桌面串流说明](docs/rdk-x5-rustdesk-streaming.md)。
@@ -772,7 +772,7 @@ Use this command template after copying or pulling the branch on RDK X5:
 
 ```bash
 cd /home/sunrise/桌面/ws_moveit/6_axis_robotic_arm
-sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh --password '<现场测试密码>'
+sudo ./scripts/install_rdk_x5_rustdesk_streaming.sh
 systemctl status rustdesk --no-pager
 rustdesk --get-id
 ```
