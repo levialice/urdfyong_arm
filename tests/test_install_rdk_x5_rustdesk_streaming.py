@@ -15,6 +15,35 @@ def bash_path(path):
     return str(path)
 
 
+def run_bash_installer(*args, check=True):
+    try:
+        result = subprocess.run(
+            ["bash", bash_path(INSTALLER), *args],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            errors="replace",
+        )
+    except FileNotFoundError as exc:
+        raise unittest.SkipTest("bash is not available") from exc
+
+    output = (result.stdout or "") + (result.stderr or "")
+    normalized_output = output.replace("\x00", "")
+    if "E_ACCESSDENIED" in normalized_output or "CreateInstance" in normalized_output:
+        raise unittest.SkipTest("bash/WSL is not available in this environment")
+
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            result.args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+
+    return result
+
+
 class RustDeskStreamingInstallerTest(unittest.TestCase):
     def read_installer(self):
         return INSTALLER.read_text(encoding="utf-8")
@@ -23,13 +52,7 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertTrue(INSTALLER.exists())
 
     def test_help_mentions_supported_options(self):
-        result = subprocess.run(
-            ["bash", bash_path(INSTALLER), "--help"],
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        result = run_bash_installer("--help")
 
         self.assertIn("--password", result.stdout)
         self.assertIn("--deb", result.stdout)
@@ -54,13 +77,7 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("read -r -s", text)
 
     def test_dry_run_does_not_require_root(self):
-        result = subprocess.run(
-            ["bash", bash_path(INSTALLER), "--dry-run", "--password", "test-pass"],
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        result = run_bash_installer("--dry-run", "--password", "test-pass")
 
         self.assertIn("[rdkx5-rustdesk] Dry run", result.stdout)
         self.assertIn("Target user: sunrise", result.stdout)
@@ -68,12 +85,7 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
     def test_options_reject_missing_value_before_next_option(self):
         for option in ("--password", "--user", "--deb"):
             with self.subTest(option=option):
-                result = subprocess.run(
-                    ["bash", bash_path(INSTALLER), option, "--dry-run"],
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
+                result = run_bash_installer(option, "--dry-run", check=False)
 
                 self.assertEqual(2, result.returncode)
                 self.assertIn(option, result.stderr)
