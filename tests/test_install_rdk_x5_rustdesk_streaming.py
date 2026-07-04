@@ -208,9 +208,11 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
         validation_call = text.index("validate_target_user_name")
         main_body = text.index("main()")
+        target_user_log = text.index('log "Target user: ${TARGET_USER}"', main_body)
         install_call = text.index("install_rustdesk", main_body)
         validation_in_main = text.index("validate_target_user_name", main_body)
 
+        self.assertLess(validation_in_main, target_user_log)
         self.assertLess(validation_in_main, install_call)
         self.assertGreater(validation_in_main, validation_call)
 

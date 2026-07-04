@@ -318,8 +318,8 @@ print_connection_info() {
 }
 
 main() {
-  log "Target user: ${TARGET_USER}"
   validate_target_user_name
+  log "Target user: ${TARGET_USER}"
 
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log "Dry run only; no system changes will be made."
