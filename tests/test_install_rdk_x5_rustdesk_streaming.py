@@ -113,8 +113,11 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
     def test_installer_prints_rustdesk_id(self):
         text = self.read_installer()
 
+        self.assertIn("print_connection_info", text)
         self.assertIn("rustdesk --get-id", text)
         self.assertIn("RustDesk ID", text)
+        self.assertIn("Target user", text)
+        self.assertIn("same LAN", text)
 
 
 if __name__ == "__main__":
