@@ -99,6 +99,17 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("rustdesk --password", text)
         self.assertIn("systemctl restart rustdesk", text)
 
+    def test_installer_checks_existing_rustdesk_before_deb_install(self):
+        text = self.read_installer()
+
+        self.assertNotIn("elif command -v rustdesk", text)
+        installed_check = text.index("if command -v rustdesk")
+        deb_check = text.index('if [[ -n "${RUSTDESK_DEB}" ]]')
+        deb_install = text.index('apt-get install -y "${RUSTDESK_DEB}"')
+
+        self.assertLess(installed_check, deb_check)
+        self.assertLess(installed_check, deb_install)
+
     def test_installer_prints_rustdesk_id(self):
         text = self.read_installer()
 

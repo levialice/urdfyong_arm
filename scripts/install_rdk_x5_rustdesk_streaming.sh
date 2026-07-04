@@ -121,6 +121,11 @@ prompt_password_if_needed() {
 }
 
 install_rustdesk() {
+  if command -v rustdesk >/dev/null 2>&1; then
+    log "RustDesk is already installed."
+    return 0
+  fi
+
   if [[ -n "${RUSTDESK_DEB}" ]]; then
     if [[ ! -f "${RUSTDESK_DEB}" ]]; then
       echo "RustDesk deb not found: ${RUSTDESK_DEB}" >&2
@@ -135,8 +140,6 @@ install_rustdesk() {
         ;;
     esac
     run apt-get install -y "${RUSTDESK_DEB}"
-  elif command -v rustdesk >/dev/null 2>&1; then
-    log "RustDesk is already installed."
   else
     echo "RustDesk is not installed. Download the Linux ARM64 .deb from https://github.com/rustdesk/rustdesk/releases and rerun with --deb PATH." >&2
     exit 1
