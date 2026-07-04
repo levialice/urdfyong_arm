@@ -128,7 +128,7 @@ check_platform() {
 configure_ros_apt() {
   [[ "$SKIP_APT" -eq 0 ]] || {
     log "Skipping apt setup by request"
-    return
+    return 0
   }
 
   log "Installing base tools and configuring ROS 2 apt repository"
@@ -159,7 +159,7 @@ configure_ros_apt() {
 }
 
 install_apt_packages() {
-  [[ "$SKIP_APT" -eq 0 ]] || return
+  [[ "$SKIP_APT" -eq 0 ]] || return 0
 
   log "Installing ROS 2 Humble, MoveIt 2, ros2_control, and build tools"
   run sudo apt-get install -y \
@@ -170,8 +170,6 @@ install_apt_packages() {
     python3-rosdep \
     python3-vcstool \
     "ros-${ROS_DISTRO}-controller-manager" \
-    "ros-${ROS_DISTRO}-gazebo-ros" \
-    "ros-${ROS_DISTRO}-gazebo-ros2-control" \
     "ros-${ROS_DISTRO}-joint-state-broadcaster" \
     "ros-${ROS_DISTRO}-joint-state-publisher" \
     "ros-${ROS_DISTRO}-joint-state-publisher-gui" \
@@ -182,14 +180,14 @@ install_apt_packages() {
     "ros-${ROS_DISTRO}-ros2-control" \
     "ros-${ROS_DISTRO}-ros2-controllers" \
     "ros-${ROS_DISTRO}-rviz2" \
-    "ros-${ROS_DISTRO}-warehouse-ros-mongo" \
+    "ros-${ROS_DISTRO}-warehouse-ros-sqlite" \
     "ros-${ROS_DISTRO}-xacro"
 }
 
 setup_rosdep() {
   [[ "$SKIP_ROSDEP" -eq 0 ]] || {
     log "Skipping rosdep by request"
-    return
+    return 0
   }
 
   log "Resolving package dependencies with rosdep"
@@ -198,6 +196,9 @@ setup_rosdep() {
   fi
   run rosdep update
   run rosdep install -r -y \
+    --skip-keys gazebo_ros \
+    --skip-keys gazebo_ros2_control \
+    --skip-keys warehouse_ros_mongo \
     --from-paths urdfyong urdfyong_hardware urdfyong_moveit_config \
     --ignore-src \
     --rosdistro "$ROS_DISTRO"
@@ -208,7 +209,9 @@ build_ros_workspace() {
     || die "/opt/ros/${ROS_DISTRO}/setup.bash not found. Install ROS 2 Humble first or rerun without --skip-apt."
 
   # shellcheck disable=SC1090
+  set +u
   source "/opt/ros/${ROS_DISTRO}/setup.bash"
+  set -u
 
   log "Building ROS workspace with colcon"
   run colcon build \
@@ -220,7 +223,7 @@ build_ros_workspace() {
 build_u2can_tools() {
   [[ "$SKIP_U2CAN" -eq 0 ]] || {
     log "Skipping u2can build by request"
-    return
+    return 0
   }
 
   log "Building u2can test tools"
@@ -253,8 +256,10 @@ print_next_steps() {
 
 Next terminal on the RDK X5:
   cd "$REPO_ROOT"
+  set +u
   source /opt/ros/${ROS_DISTRO}/setup.bash
   source install/setup.bash
+  set -u
   ros2 launch urdfyong_hardware hardware_moveit.launch.py
 
 Hardware defaults used by this repository:
