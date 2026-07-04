@@ -282,7 +282,9 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
         self.assertIn("[security]\nWaylandEnable=true", result.stdout)
         self.assertIn("[other]\nWaylandEnable=true", result.stdout)
-        self.assertRegex(result.stdout, r"\[daemon\]\nAutomaticLoginEnable=True\n\n?WaylandEnable=false")
+        daemon_section = result.stdout.split("[daemon]\n", 1)[1].split("\n[other]\n", 1)[0]
+        self.assertIn("AutomaticLoginEnable=True\n", daemon_section)
+        self.assertIn("WaylandEnable=false\n", daemon_section)
 
     def test_set_gdm_key_collapses_duplicate_daemon_keys(self):
         temp_root = REPO_ROOT / "tmp_test_artifacts"
