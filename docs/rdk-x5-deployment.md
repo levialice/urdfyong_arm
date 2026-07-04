@@ -79,6 +79,8 @@ RDK X5 可以承担机械臂硬件控制，但不建议一开始就把所有图�
 
 两边保持同一个 ROS 2 网络环境后，电脑可以远程查看话题、发送 MoveIt 目标或调用 action，RDK X5 专注执行底层电机控制。
 
+如果现场希望 RDK X5 不接显示器也能查看完整桌面，可参考 [RDK X5 RustDesk 桌面串流说明](rdk-x5-rustdesk-streaming.md) 配置同一局域网 RustDesk 访问。
+
 部署阶段建议先在 RDK X5 上验证：
 
 ```bash

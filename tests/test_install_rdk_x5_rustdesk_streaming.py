@@ -336,6 +336,22 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("AutomaticLoginEnable=True\n", daemon_section)
         self.assertIn("[other]\nWaylandEnable=true", result.stdout)
 
+    def test_streaming_docs_are_linked(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        deployment = (REPO_ROOT / "docs" / "rdk-x5-deployment.md").read_text(encoding="utf-8")
+
+        self.assertIn("install_rdk_x5_rustdesk_streaming.sh", readme)
+        self.assertIn("rdk-x5-rustdesk-streaming.md", readme)
+        self.assertIn("rdk-x5-rustdesk-streaming.md", deployment)
+
+    def test_streaming_doc_mentions_headless_verification(self):
+        doc = (REPO_ROOT / "docs" / "rdk-x5-rustdesk-streaming.md").read_text(encoding="utf-8")
+
+        self.assertIn("RustDesk ID", doc)
+        self.assertIn("不接显示器", doc)
+        self.assertIn("同一局域网", doc)
+        self.assertIn("RDKX5-Setup", doc)
+
 
 if __name__ == "__main__":
     unittest.main()
