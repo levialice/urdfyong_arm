@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -20,6 +21,14 @@ class FakeRunner:
         self.calls.append((args, timeout, check))
         if self.outputs:
             return self.outputs.pop(0)
+        return ""
+
+
+class FailingConnectRunner(FakeRunner):
+    def __call__(self, args, timeout=10, check=False):
+        self.calls.append((args, timeout, check))
+        if args[:4] == ["nmcli", "device", "wifi", "connect"]:
+            raise subprocess.CalledProcessError(10, args, stderr="Secrets were required, but not provided")
         return ""
 
 
@@ -50,6 +59,7 @@ class WebRenderingTest(unittest.TestCase):
         self.assertIn("192.168.88.1", html)
         self.assertIn('name="ssid"', html)
         self.assertIn('name="password"', html)
+        self.assertIn("/scan", html)
 
     def test_parse_wifi_list_ignores_blank_ssids(self):
         rows = provision.parse_wifi_list("levi:90:WPA2\n:80:WPA2\nGuest:50:\n")
@@ -68,6 +78,22 @@ class WebRenderingTest(unittest.TestCase):
             runner.calls[1][0],
             ["nmcli", "--terse", "--fields", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
         )
+
+    def test_render_index_says_manual_ssid_is_supported_when_no_scan_results(self):
+        html = provision.render_index([], "热点已启动")
+
+        self.assertIn("手动输入", html)
+        self.assertIn("刷新 Wi-Fi 列表", html)
+
+
+class StatusCacheTest(unittest.TestCase):
+    def test_connection_status_keeps_cached_networks(self):
+        status = provision.ConnectionStatus()
+
+        self.assertEqual(status.get_networks(), [])
+        status.set_networks([{"ssid": "levi", "signal": "80", "security": "WPA2"}])
+
+        self.assertEqual(status.get_networks()[0]["ssid"], "levi")
 
 
 class BootBehaviorTest(unittest.TestCase):
@@ -93,25 +119,56 @@ class BootBehaviorTest(unittest.TestCase):
 
 
 class ConnectFormTest(unittest.TestCase):
-    def test_connect_from_form_connects_wifi_and_stops_hotspot(self):
-        runner = FakeRunner(["", ""])
+    def test_run_connect_job_stops_hotspot_before_connecting(self):
+        runner = FakeRunner(["", "", "wlan0:wifi:connected:Lab WiFi\n"])
         nm = provision.Nmcli(runner=runner)
+        status = provision.ConnectionStatus()
 
-        success, message = provision.connect_from_form(nm, b"ssid=Lab+WiFi&password=secret+pw")
+        provision.run_connect_job(nm, "Lab WiFi", "secret pw", status, iface="wlan0")
 
-        self.assertTrue(success)
-        self.assertIn("Lab WiFi", message)
+        self.assertIn("Connected to Lab WiFi", status.get())
+        self.assertEqual(runner.calls[0][0], ["nmcli", "con", "down", "RDKX5-Setup"])
         self.assertEqual(
-            runner.calls[0][0],
+            runner.calls[1][0],
             ["nmcli", "device", "wifi", "connect", "Lab WiFi", "password", "secret pw"],
         )
-        self.assertEqual(runner.calls[1][0], ["nmcli", "con", "down", "RDKX5-Setup"])
+
+    def test_run_connect_job_restores_hotspot_when_connect_fails(self):
+        runner = FailingConnectRunner()
+        nm = provision.Nmcli(runner=runner)
+        status = provision.ConnectionStatus()
+
+        provision.run_connect_job(nm, "Lab WiFi", "bad pw", status, iface="wlan0", retry_delay=0)
+
+        commands = [" ".join(call[0]) for call in runner.calls]
+        self.assertIn("Failed to connect to Lab WiFi", status.get())
+        self.assertTrue(any(cmd == "nmcli con down RDKX5-Setup" for cmd in commands))
+        self.assertTrue(any("nmcli con up RDKX5-Setup" in cmd for cmd in commands))
+
+    def test_start_connect_job_returns_before_switching_networks(self):
+        runner = FakeRunner()
+        nm = provision.Nmcli(runner=runner)
+        status = provision.ConnectionStatus()
+        scheduled = []
+
+        success, message = provision.start_connect_job(
+            nm,
+            b"ssid=Lab+WiFi&password=secret+pw",
+            status,
+            starter=lambda target, args: scheduled.append((target, args)),
+        )
+
+        self.assertTrue(success)
+        self.assertIn("Connecting to Lab WiFi", message)
+        self.assertEqual(runner.calls, [])
+        self.assertEqual(len(scheduled), 1)
 
     def test_connect_from_form_rejects_missing_ssid(self):
         runner = FakeRunner()
         nm = provision.Nmcli(runner=runner)
+        status = provision.ConnectionStatus()
 
-        success, message = provision.connect_from_form(nm, b"password=secret")
+        success, message = provision.start_connect_job(nm, b"password=secret", status)
 
         self.assertFalse(success)
         self.assertIn("SSID", message)
