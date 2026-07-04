@@ -7,6 +7,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = REPO_ROOT / "scripts" / "install_rdk_x5_rustdesk_streaming.sh"
 
 
+def bash_path(path):
+    if path.drive:
+        drive = path.drive.rstrip(":").lower()
+        parts = [part for part in path.parts[1:] if part not in ("\\", "/")]
+        return "/mnt/" + drive + "/" + "/".join(parts)
+    return str(path)
+
+
 class RustDeskStreamingInstallerTest(unittest.TestCase):
     def read_installer(self):
         return INSTALLER.read_text(encoding="utf-8")
@@ -16,7 +24,7 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
     def test_help_mentions_supported_options(self):
         result = subprocess.run(
-            ["bash", str(INSTALLER), "--help"],
+            ["bash", bash_path(INSTALLER), "--help"],
             check=True,
             text=True,
             stdout=subprocess.PIPE,
@@ -47,7 +55,7 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
 
     def test_dry_run_does_not_require_root(self):
         result = subprocess.run(
-            ["bash", str(INSTALLER), "--dry-run", "--password", "test-pass"],
+            ["bash", bash_path(INSTALLER), "--dry-run", "--password", "test-pass"],
             check=True,
             text=True,
             stdout=subprocess.PIPE,
