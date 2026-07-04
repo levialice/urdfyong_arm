@@ -81,15 +81,30 @@ class Nmcli:
             timeout=20,
         )
 
+    def _hotspot_profile_exists(self):
+        output = self.runner(["nmcli", "-t", "-f", "NAME,UUID", "con", "show"], timeout=10, check=False)
+        uuids = []
+        for line in output.splitlines():
+            name, _, uuid = line.partition(":")
+            if name == HOTSPOT_SSID and uuid:
+                uuids.append(uuid)
+        for uuid in uuids[1:]:
+            self.runner(["nmcli", "con", "delete", "uuid", uuid], timeout=20, check=False)
+        return bool(uuids)
+
     def start_hotspot(self, iface=WIFI_INTERFACE):
-        commands = [
-            ["nmcli", "con", "add", "type", "wifi", "ifname", iface, "con-name", HOTSPOT_SSID, "autoconnect", "no", "ssid", HOTSPOT_SSID],
+        commands = []
+        if not self._hotspot_profile_exists():
+            commands.append(
+                ["nmcli", "con", "add", "type", "wifi", "ifname", iface, "con-name", HOTSPOT_SSID, "autoconnect", "no", "ssid", HOTSPOT_SSID]
+            )
+        commands.extend([
             ["nmcli", "con", "modify", HOTSPOT_SSID, "802-11-wireless.mode", "ap"],
             ["nmcli", "con", "modify", HOTSPOT_SSID, "802-11-wireless.band", "bg"],
             ["nmcli", "con", "modify", HOTSPOT_SSID, "ipv4.method", "shared", "ipv4.addresses", HOTSPOT_CIDR],
             ["nmcli", "con", "modify", HOTSPOT_SSID, "ipv6.method", "ignore"],
             ["nmcli", "con", "up", HOTSPOT_SSID],
-        ]
+        ])
         for command in commands:
             self.runner(command, timeout=20, check=False)
         active = self.runner(["nmcli", "-t", "-f", "NAME", "con", "show", "--active"], timeout=10, check=False)

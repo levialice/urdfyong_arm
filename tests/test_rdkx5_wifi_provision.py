@@ -134,7 +134,7 @@ class BootBehaviorTest(unittest.TestCase):
         self.assertFalse(any("RDKX5-Setup" in " ".join(call[0]) for call in runner.calls))
 
     def test_starts_open_hotspot_when_wifi_is_not_connected(self):
-        runner = FakeRunner(["wlan0:wifi:disconnected:\n", "", "", "", "", "", "", "RDKX5-Setup\n"])
+        runner = FakeRunner(["wlan0:wifi:disconnected:\n", "", "", "", "", "", "", "", "RDKX5-Setup\n"])
         nm = provision.Nmcli(runner=runner)
 
         result = provision.ensure_provisioning_mode(nm, iface="wlan0", wait_seconds=0)
@@ -144,8 +144,28 @@ class BootBehaviorTest(unittest.TestCase):
         self.assertTrue(any("con add type wifi" in cmd and "RDKX5-Setup" in cmd for cmd in commands))
         self.assertTrue(any("ipv4.addresses 192.168.88.1/24" in cmd for cmd in commands))
 
+    def test_start_hotspot_reuses_existing_profile(self):
+        runner = FakeRunner(["RDKX5-Setup:uuid-one\n", "", "", "", "", "", "RDKX5-Setup\n"])
+        nm = provision.Nmcli(runner=runner)
+
+        nm.start_hotspot("wlan0")
+
+        commands = [" ".join(call[0]) for call in runner.calls]
+        self.assertFalse(any("con add type wifi" in cmd for cmd in commands))
+        self.assertTrue(any(cmd == "nmcli con up RDKX5-Setup" for cmd in commands))
+
+    def test_start_hotspot_removes_duplicate_profiles_before_up(self):
+        runner = FakeRunner(["RDKX5-Setup:uuid-one\nRDKX5-Setup:uuid-two\n", "", "", "", "", "", "", "RDKX5-Setup\n"])
+        nm = provision.Nmcli(runner=runner)
+
+        nm.start_hotspot("wlan0")
+
+        commands = [" ".join(call[0]) for call in runner.calls]
+        self.assertIn("nmcli con delete uuid uuid-two", commands)
+        self.assertFalse(any("con add type wifi" in cmd for cmd in commands))
+
     def test_hotspot_start_fails_when_profile_does_not_become_active(self):
-        runner = FakeRunner(["", "", "", "", "", ""])
+        runner = FakeRunner(["", "", "", "", "", "", ""])
         nm = provision.Nmcli(runner=runner)
 
         with self.assertRaises(RuntimeError):
