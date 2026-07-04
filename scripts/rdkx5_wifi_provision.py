@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import re
 import html
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import subprocess
@@ -27,6 +28,13 @@ def run_command(args, timeout=10, check=False):
     return result.stdout
 
 
+def wifi_connection_name(ssid):
+    safe_ssid = re.sub(r"[^A-Za-z0-9_.-]+", "_", ssid).strip("_")
+    if not safe_ssid:
+        safe_ssid = "network"
+    return f"RDKX5-WiFi-{safe_ssid[:48]}"
+
+
 class Nmcli:
     def __init__(self, runner=run_command):
         self.runner = runner
@@ -42,11 +50,27 @@ class Nmcli:
                 return parts[2] == "connected"
         return False
 
-    def connect_wifi(self, ssid, password):
+    def connect_wifi(self, ssid, password, iface=WIFI_INTERFACE):
+        connection_name = wifi_connection_name(ssid)
         args = ["nmcli", "device", "wifi", "connect", ssid]
         if password:
             args.extend(["password", password])
+        args.extend(["ifname", iface, "name", connection_name])
         self.runner(args, timeout=45, check=True)
+        self.runner(
+            [
+                "nmcli",
+                "con",
+                "modify",
+                connection_name,
+                "connection.autoconnect",
+                "yes",
+                "connection.permissions",
+                "",
+            ],
+            timeout=20,
+            check=True,
+        )
 
     def rescan_wifi(self):
         self.runner(["nmcli", "device", "wifi", "rescan"], timeout=20, check=False)
@@ -68,6 +92,9 @@ class Nmcli:
         ]
         for command in commands:
             self.runner(command, timeout=20, check=False)
+        active = self.runner(["nmcli", "-t", "-f", "NAME", "con", "show", "--active"], timeout=10, check=False)
+        if HOTSPOT_SSID not in active.splitlines():
+            raise RuntimeError(f"{HOTSPOT_SSID} hotspot did not become active")
 
     def stop_hotspot(self):
         self.runner(["nmcli", "con", "down", HOTSPOT_SSID], timeout=20, check=False)
@@ -204,7 +231,7 @@ def run_connect_job(nmcli, ssid, password, status, iface=WIFI_INTERFACE, retry_d
     try:
         nmcli.stop_hotspot()
         time.sleep(retry_delay)
-        nmcli.connect_wifi(ssid, password)
+        nmcli.connect_wifi(ssid, password, iface=iface)
         if nmcli.has_connected_wifi(iface):
             status.set(f"Connected to {ssid}. Switch your computer back to that network.")
         else:

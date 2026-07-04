@@ -29,6 +29,8 @@ class FailingConnectRunner(FakeRunner):
         self.calls.append((args, timeout, check))
         if args[:4] == ["nmcli", "device", "wifi", "connect"]:
             raise subprocess.CalledProcessError(10, args, stderr="Secrets were required, but not provided")
+        if args == ["nmcli", "-t", "-f", "NAME", "con", "show", "--active"]:
+            return "RDKX5-Setup\n"
         return ""
 
 
@@ -37,11 +39,36 @@ class NmcliHelperTest(unittest.TestCase):
         runner = FakeRunner([""])
         nm = provision.Nmcli(runner=runner)
 
-        nm.connect_wifi("Lab WiFi", "pw with spaces")
+        nm.connect_wifi("Lab WiFi", "pw with spaces", iface="wlan0")
 
         self.assertEqual(
             runner.calls[0][0],
-            ["nmcli", "device", "wifi", "connect", "Lab WiFi", "password", "pw with spaces"],
+            [
+                "nmcli",
+                "device",
+                "wifi",
+                "connect",
+                "Lab WiFi",
+                "password",
+                "pw with spaces",
+                "ifname",
+                "wlan0",
+                "name",
+                "RDKX5-WiFi-Lab_WiFi",
+            ],
+        )
+        self.assertEqual(
+            runner.calls[1][0],
+            [
+                "nmcli",
+                "con",
+                "modify",
+                "RDKX5-WiFi-Lab_WiFi",
+                "connection.autoconnect",
+                "yes",
+                "connection.permissions",
+                "",
+            ],
         )
 
     def test_connected_wifi_detects_connected_wireless_device(self):
@@ -107,7 +134,7 @@ class BootBehaviorTest(unittest.TestCase):
         self.assertFalse(any("RDKX5-Setup" in " ".join(call[0]) for call in runner.calls))
 
     def test_starts_open_hotspot_when_wifi_is_not_connected(self):
-        runner = FakeRunner(["wlan0:wifi:disconnected:\n", "", "", "", "", "", ""])
+        runner = FakeRunner(["wlan0:wifi:disconnected:\n", "", "", "", "", "", "", "RDKX5-Setup\n"])
         nm = provision.Nmcli(runner=runner)
 
         result = provision.ensure_provisioning_mode(nm, iface="wlan0", wait_seconds=0)
@@ -117,10 +144,17 @@ class BootBehaviorTest(unittest.TestCase):
         self.assertTrue(any("con add type wifi" in cmd and "RDKX5-Setup" in cmd for cmd in commands))
         self.assertTrue(any("ipv4.addresses 192.168.88.1/24" in cmd for cmd in commands))
 
+    def test_hotspot_start_fails_when_profile_does_not_become_active(self):
+        runner = FakeRunner(["", "", "", "", "", ""])
+        nm = provision.Nmcli(runner=runner)
+
+        with self.assertRaises(RuntimeError):
+            nm.start_hotspot("wlan0")
+
 
 class ConnectFormTest(unittest.TestCase):
     def test_run_connect_job_stops_hotspot_before_connecting(self):
-        runner = FakeRunner(["", "", "wlan0:wifi:connected:Lab WiFi\n"])
+        runner = FakeRunner(["", "", "", "wlan0:wifi:connected:Lab WiFi\n"])
         nm = provision.Nmcli(runner=runner)
         status = provision.ConnectionStatus()
 
@@ -130,7 +164,19 @@ class ConnectFormTest(unittest.TestCase):
         self.assertEqual(runner.calls[0][0], ["nmcli", "con", "down", "RDKX5-Setup"])
         self.assertEqual(
             runner.calls[1][0],
-            ["nmcli", "device", "wifi", "connect", "Lab WiFi", "password", "secret pw"],
+            [
+                "nmcli",
+                "device",
+                "wifi",
+                "connect",
+                "Lab WiFi",
+                "password",
+                "secret pw",
+                "ifname",
+                "wlan0",
+                "name",
+                "RDKX5-WiFi-Lab_WiFi",
+            ],
         )
 
     def test_run_connect_job_restores_hotspot_when_connect_fails(self):
