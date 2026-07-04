@@ -189,6 +189,16 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("current_section", text)
         self.assertIn("os.replace", text)
 
+    def test_set_gdm_key_preserves_file_metadata_on_atomic_replace(self):
+        text = self.read_installer()
+
+        self.assertIn("existing_stat = path.stat()", text)
+        self.assertIn("stat.S_IMODE(existing_stat.st_mode)", text)
+        self.assertIn("os.chmod(tmp_name", text)
+        self.assertIn("os.chown(tmp_name, existing_stat.st_uid, existing_stat.st_gid)", text)
+        self.assertIn("0o644", text)
+        self.assertLess(text.index("os.chmod(tmp_name"), text.index("os.replace(tmp_name, path)"))
+
     def test_set_gdm_key_only_updates_daemon_section(self):
         temp_root = REPO_ROOT / "tmp_test_artifacts"
         try:
@@ -237,6 +247,56 @@ class RustDeskStreamingInstallerTest(unittest.TestCase):
         self.assertIn("[security]\nWaylandEnable=true", result.stdout)
         self.assertIn("[other]\nWaylandEnable=true", result.stdout)
         self.assertRegex(result.stdout, r"\[daemon\]\nAutomaticLoginEnable=True\n\n?WaylandEnable=false")
+
+    def test_set_gdm_key_collapses_duplicate_daemon_keys(self):
+        temp_root = REPO_ROOT / "tmp_test_artifacts"
+        try:
+            temp_root.mkdir(exist_ok=True)
+        except PermissionError as exc:
+            raise unittest.SkipTest("temporary test directory is not writable") from exc
+
+        config = temp_root / f"custom-{self.id().replace('.', '-')}.conf"
+        try:
+            config.write_text(
+                "[daemon]\n"
+                "WaylandEnable=true\n"
+                "#WaylandEnable=true\n"
+                "AutomaticLoginEnable=True\n"
+                "WaylandEnable=maybe\n"
+                "\n"
+                "[other]\n"
+                "WaylandEnable=true\n",
+                encoding="utf-8",
+            )
+        except PermissionError as exc:
+            raise unittest.SkipTest("temporary test file is not writable") from exc
+
+        script = (
+            "set -euo pipefail\n"
+            f"export INSTALLER={bash_path(INSTALLER)!r}\n"
+            f"export GDM_CONFIG={bash_path(config)!r}\n"
+            "export RDKX5_RUSTDESK_INSTALLER_TESTING=1\n"
+            'source "$INSTALLER"\n'
+            'set_gdm_key "$GDM_CONFIG" "WaylandEnable" "false"\n'
+            'cat "$GDM_CONFIG"\n'
+        )
+        try:
+            result = run_bash_script(script)
+        finally:
+            try:
+                config.unlink()
+            except FileNotFoundError:
+                pass
+            try:
+                temp_root.rmdir()
+            except OSError:
+                pass
+
+        daemon_section = result.stdout.split("[daemon]\n", 1)[1].split("\n[other]\n", 1)[0]
+        self.assertEqual(1, daemon_section.count("WaylandEnable="))
+        self.assertIn("WaylandEnable=false\n", daemon_section)
+        self.assertIn("AutomaticLoginEnable=True\n", daemon_section)
+        self.assertIn("[other]\nWaylandEnable=true", result.stdout)
 
 
 if __name__ == "__main__":

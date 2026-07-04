@@ -177,6 +177,7 @@ ensure_daemon_section() {
   if [[ ! -f "${file}" ]]; then
     run install -d -m 0755 "$(dirname "${file}")"
     if [[ "${DRY_RUN}" -eq 0 ]]; then
+      install -m 0644 /dev/null "${file}"
       printf '[daemon]\n' > "${file}"
     else
       log "Dry run: would create ${file} with [daemon] section"
@@ -200,6 +201,7 @@ set_gdm_key() {
     python3 - "${file}" "${key}" "${value}" <<'PY'
 import os
 import re
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -208,6 +210,7 @@ path = Path(sys.argv[1])
 target_key = sys.argv[2]
 target_value = sys.argv[3]
 
+existing_stat = path.stat() if path.exists() else None
 lines = path.read_text(encoding="utf-8").splitlines(keepends=True) if path.exists() else []
 section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:[#;].*)?$")
 key_re = re.compile(rf"^\s*#?\s*{re.escape(target_key)}\s*=")
@@ -235,19 +238,29 @@ if daemon_start is None:
         lines.append("\n")
     lines.extend(["[daemon]\n", f"{target_key}={target_value}\n"])
 else:
-    inserted = False
-    for index in range(daemon_start + 1, daemon_end):
-        if key_re.match(lines[index].rstrip("\r\n")):
-            lines[index] = f"{target_key}={target_value}\n"
-            inserted = True
-            break
-    if not inserted:
-        lines.insert(daemon_end, f"{target_key}={target_value}\n")
+    rewritten = []
+    for index, line in enumerate(lines):
+        if index == daemon_end:
+            rewritten.append(f"{target_key}={target_value}\n")
+        if daemon_start < index < daemon_end and key_re.match(line.rstrip("\r\n")):
+            continue
+        rewritten.append(line)
+    if daemon_end == len(lines):
+        rewritten.append(f"{target_key}={target_value}\n")
+    lines = rewritten
 
 fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent), text=True)
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as tmp:
         tmp.writelines(lines)
+    if existing_stat is None:
+        os.chmod(tmp_name, 0o644)
+    else:
+        os.chmod(tmp_name, stat.S_IMODE(existing_stat.st_mode))
+        try:
+            os.chown(tmp_name, existing_stat.st_uid, existing_stat.st_gid)
+        except (AttributeError, PermissionError):
+            pass
     os.replace(tmp_name, path)
 except Exception:
     try:
